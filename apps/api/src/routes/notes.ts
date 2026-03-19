@@ -1,23 +1,31 @@
 import { Elysia, t } from "elysia";
 import { eq } from "drizzle-orm";
-import { db } from "../db/client";
+import { getDb } from "../db/client";
 import { notes } from "../db/schema";
+import { memoryStore } from "../db/memory-store";
+
+const useDb = !!process.env.DATABASE_URL;
 
 export const notesRoutes = new Elysia({ prefix: "/notes" })
 	.get("/", async () => {
-		const allNotes = await db
-			.select()
-			.from(notes)
-			.orderBy(notes.updatedAt);
+		if (!useDb) return memoryStore.getAllNotes();
+		const db = await getDb();
+		const allNotes = await db.select().from(notes).orderBy(notes.updatedAt);
 		return allNotes.reverse();
 	})
 	.get(
 		"/:id",
 		async ({ params, set }) => {
-			const note = await db
-				.select()
-				.from(notes)
-				.where(eq(notes.id, params.id));
+			if (!useDb) {
+				const note = memoryStore.getNoteById(params.id);
+				if (!note) {
+					set.status = 404;
+					return { error: "Note not found" };
+				}
+				return note;
+			}
+			const db = await getDb();
+			const note = await db.select().from(notes).where(eq(notes.id, params.id));
 			if (note.length === 0) {
 				set.status = 404;
 				return { error: "Note not found" };
@@ -31,6 +39,12 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 	.post(
 		"/",
 		async ({ body, set }) => {
+			if (!useDb) {
+				const note = memoryStore.createNote(body.title, body.content);
+				set.status = 201;
+				return note;
+			}
+			const db = await getDb();
 			const [newNote] = await db
 				.insert(notes)
 				.values({ title: body.title, content: body.content })
@@ -48,6 +62,15 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 	.put(
 		"/:id",
 		async ({ params, body, set }) => {
+			if (!useDb) {
+				const note = memoryStore.updateNote(params.id, body);
+				if (!note) {
+					set.status = 404;
+					return { error: "Note not found" };
+				}
+				return note;
+			}
+			const db = await getDb();
 			const [updated] = await db
 				.update(notes)
 				.set({ title: body.title, content: body.content })
@@ -70,6 +93,15 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 	.delete(
 		"/:id",
 		async ({ params, set }) => {
+			if (!useDb) {
+				const note = memoryStore.deleteNote(params.id);
+				if (!note) {
+					set.status = 404;
+					return { error: "Note not found" };
+				}
+				return { success: true };
+			}
+			const db = await getDb();
 			const [deleted] = await db
 				.delete(notes)
 				.where(eq(notes.id, params.id))

@@ -1,9 +1,12 @@
 import { Elysia, t } from "elysia";
 import Anthropic from "@anthropic-ai/sdk";
-import { db } from "../db/client";
-import { notes } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { getDb } from "../db/client";
+import { notes } from "../db/schema";
+import { memoryStore } from "../db/memory-store";
 import { buildAnalysisPrompt, buildChatSystemPrompt } from "../ai/prompt";
+
+const useDb = !!process.env.DATABASE_URL;
 
 const getClient = () => {
 	const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -13,23 +16,32 @@ const getClient = () => {
 	return new Anthropic({ apiKey });
 };
 
+async function fetchNotes(noteIds?: number[]) {
+	if (!useDb) {
+		return noteIds && noteIds.length > 0
+			? memoryStore.getNotesByIds(noteIds)
+			: memoryStore.getAllNotes();
+	}
+	const db = await getDb();
+	if (noteIds && noteIds.length > 0) {
+		return db.select().from(notes).where(inArray(notes.id, noteIds));
+	}
+	return db.select().from(notes);
+}
+
+async function fetchNoteById(id: number) {
+	if (!useDb) return memoryStore.getNoteById(id) ?? null;
+	const db = await getDb();
+	const [note] = await db.select().from(notes).where(eq(notes.id, id));
+	return note ?? null;
+}
+
 export const chatRoutes = new Elysia({ prefix: "/chat" })
 	.post(
 		"/",
 		async ({ body }) => {
 			const anthropic = getClient();
-
-			// Fetch notes for context — either specific ones or all
-			let contextNotes;
-			if (body.noteIds && body.noteIds.length > 0) {
-				contextNotes = await db
-					.select()
-					.from(notes)
-					.where(inArray(notes.id, body.noteIds));
-			} else {
-				contextNotes = await db.select().from(notes);
-			}
-
+			const contextNotes = await fetchNotes(body.noteIds);
 			const systemPrompt = buildChatSystemPrompt(contextNotes);
 
 			const response = await anthropic.messages.create({
@@ -40,9 +52,7 @@ export const chatRoutes = new Elysia({ prefix: "/chat" })
 			});
 
 			const reply =
-				response.content[0].type === "text"
-					? response.content[0].text
-					: "";
+				response.content[0].type === "text" ? response.content[0].text : "";
 
 			return { reply };
 		},
@@ -57,17 +67,7 @@ export const chatRoutes = new Elysia({ prefix: "/chat" })
 		"/stream",
 		async function* ({ body }) {
 			const anthropic = getClient();
-
-			let contextNotes;
-			if (body.noteIds && body.noteIds.length > 0) {
-				contextNotes = await db
-					.select()
-					.from(notes)
-					.where(inArray(notes.id, body.noteIds));
-			} else {
-				contextNotes = await db.select().from(notes);
-			}
-
+			const contextNotes = await fetchNotes(body.noteIds);
 			const systemPrompt = buildChatSystemPrompt(contextNotes);
 
 			const stream = anthropic.messages.stream({
@@ -97,11 +97,7 @@ export const chatRoutes = new Elysia({ prefix: "/chat" })
 		"/analyze",
 		async ({ body, set }) => {
 			const anthropic = getClient();
-
-			const [note] = await db
-				.select()
-				.from(notes)
-				.where(eq(notes.id, body.noteId));
+			const note = await fetchNoteById(body.noteId);
 
 			if (!note) {
 				set.status = 404;
@@ -117,9 +113,7 @@ export const chatRoutes = new Elysia({ prefix: "/chat" })
 			});
 
 			const analysis =
-				response.content[0].type === "text"
-					? response.content[0].text
-					: "";
+				response.content[0].type === "text" ? response.content[0].text : "";
 
 			return { analysis };
 		},
