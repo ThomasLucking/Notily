@@ -12,16 +12,44 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	return res.json();
 }
 
+// Types
+export interface Note {
+	id: number;
+	title: string;
+	content: string;
+	folderId: number | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface Folder {
+	id: number;
+	name: string;
+	parentId: number | null;
+	createdAt: string;
+}
+
 // Notes API
 export const notesApi = {
 	getAll: () => request<Note[]>("/notes"),
 	getById: (id: number) => request<Note>(`/notes/${id}`),
-	create: (data: { title: string; content: string }) =>
+	create: (data: { title: string; content: string; folderId?: number | null }) =>
 		request<Note>("/notes", { method: "POST", body: JSON.stringify(data) }),
-	update: (id: number, data: { title?: string; content?: string }) =>
+	update: (id: number, data: { title?: string; content?: string; folderId?: number | null }) =>
 		request<Note>(`/notes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 	delete: (id: number) =>
 		request<{ success: boolean }>(`/notes/${id}`, { method: "DELETE" }),
+};
+
+// Folders API
+export const foldersApi = {
+	getAll: () => request<Folder[]>("/folders"),
+	create: (data: { name: string; parentId?: number | null }) =>
+		request<Folder>("/folders", { method: "POST", body: JSON.stringify(data) }),
+	update: (id: number, data: { name?: string; parentId?: number | null }) =>
+		request<Folder>(`/folders/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+	delete: (id: number) =>
+		request<{ success: boolean }>(`/folders/${id}`, { method: "DELETE" }),
 };
 
 // Chat API
@@ -53,12 +81,3 @@ export const chatApi = {
 		}
 	},
 };
-
-// Types inline to avoid import issues with workspace resolution at dev time
-interface Note {
-	id: number;
-	title: string;
-	content: string;
-	createdAt: string;
-	updatedAt: string;
-}
