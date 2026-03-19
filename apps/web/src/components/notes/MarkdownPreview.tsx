@@ -7,7 +7,7 @@ interface MarkdownPreviewProps {
 
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
 	if (!content.trim()) {
-		return <div className="markdown-empty">Nothing to preview</div>;
+		return <p className="text-muted-foreground italic p-4">Nothing to preview</p>;
 	}
 
 	return (

@@ -5,7 +5,11 @@
     "rootDir": "./src",
     "jsx": "react-jsx",
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

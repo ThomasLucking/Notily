@@ -40,7 +40,7 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 		"/",
 		async ({ body, set }) => {
 			if (!useDb) {
-				const note = memoryStore.createNote(body.title, body.content);
+				const note = memoryStore.createNote(body.title, body.content, body.folderId ?? null);
 				set.status = 201;
 				return note;
 			}
@@ -56,6 +56,7 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 			body: t.Object({
 				title: t.String({ minLength: 1 }),
 				content: t.String(),
+				folderId: t.Optional(t.Nullable(t.Number())),
 			}),
 		},
 	)
@@ -63,7 +64,7 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 		"/:id",
 		async ({ params, body, set }) => {
 			if (!useDb) {
-				const note = memoryStore.updateNote(params.id, body);
+				const note = memoryStore.updateNote(params.id, { title: body.title, content: body.content, folderId: body.folderId });
 				if (!note) {
 					set.status = 404;
 					return { error: "Note not found" };
@@ -87,6 +88,7 @@ export const notesRoutes = new Elysia({ prefix: "/notes" })
 			body: t.Object({
 				title: t.Optional(t.String()),
 				content: t.Optional(t.String()),
+				folderId: t.Optional(t.Nullable(t.Number())),
 			}),
 		},
 	)
